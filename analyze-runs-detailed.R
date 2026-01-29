@@ -10,7 +10,7 @@ options(
   dplyr.summarise.inform = FALSE
 )
 
-figure_dir <- "figures"
+figure_dir <- "plots"
 dir.create(figure_dir, showWarnings = FALSE)
 
 basins <- c("FSSO3", "WGCM8", "SAKW1")
@@ -26,10 +26,23 @@ for (basin in basins) {
   for (calb_type in calb_types) {
     for (forcing_type in forcing_types) {
       i <- i + 1
-      basin_dir <- sprintf("nwrfc-calibration-paper-data/Optimization_CAMELS_%s/%s/%s", forcing_type, zones[basin], basin)
+      basin_dir <- sprintf(
+        "nwrfc-calibration-paper-data/Optimization_CAMELS_%s/%s/%s",
+        forcing_type,
+        zones[basin],
+        basin
+      )
       calb_dir <- list.files(basin_dir, paste0("results_", calb_type, "_*"))
-      calb_data_list[[i]] <- read_csv(file.path(basin_dir, calb_dir, "optimal_daily.csv")) |>
-        mutate(basin = basin, forcing_type = forcing_type, calb_type = calb_type)
+      calb_data_list[[i]] <- read_csv(file.path(
+        basin_dir,
+        calb_dir,
+        "optimal_daily.csv"
+      )) |>
+        mutate(
+          basin = basin,
+          forcing_type = forcing_type,
+          calb_type = calb_type
+        )
     }
   }
 }
@@ -49,14 +62,22 @@ calb_data_long <- calb_data |>
 calb_data |>
   group_by(basin, calb_type, forcing_type) |>
   summarise(kge = KGE(sim, obs), nse = KGE(sim, obs), .groups = "drop") |>
-  pivot_wider(id_cols = c(basin, forcing_type), names_from = calb_type, values_from = kge) |>
+  pivot_wider(
+    id_cols = c(basin, forcing_type),
+    names_from = calb_type,
+    values_from = kge
+  ) |>
   xtable(digits = 3)
 
 # monthly metric table
 calb_data |>
   group_by(basin, month, calb_type, forcing_type) |>
   summarise(kge = KGE(sim, obs), nse = KGE(sim, obs), .groups = "drop") |>
-  pivot_wider(id_cols = c(basin, forcing_type, month), names_from = calb_type, values_from = nse) |>
+  pivot_wider(
+    id_cols = c(basin, forcing_type, month),
+    names_from = calb_type,
+    values_from = nse
+  ) |>
   mutate(month = as.integer(month)) |>
   arrange(basin, forcing_type, month) |>
   group_by(basin) |>
@@ -73,18 +94,21 @@ low_high_flow <- calb_data |>
     p05 = quantile(obs, .05),
     p95 = quantile(obs, .95)
   ) |>
-  mutate(flow = case_when(
-    obs < p05 ~ "Low Flow",
-    obs > p95 ~ "High Flow",
-    .default = NA
-  )) |>
+  mutate(
+    flow = case_when(
+      obs < p05 ~ "Low Flow",
+      obs > p95 ~ "High Flow",
+      .default = NA
+    )
+  ) |>
   na.omit()
 low_high_flow_pbias <- low_high_flow |>
   group_by(basin, forcing_type, calb_type, flow) |>
   summarise(
     pbias = pbias(sim, obs),
     nse = NSE(sim, obs),
-    x = 0.1, y = 0.9
+    x = 0.1,
+    y = 0.9
   ) |>
   mutate(label = paste0("bias = ", round(pbias, 1), "%"))
 
@@ -100,20 +124,24 @@ cyclical <- calb_data_long |>
   mutate(plot_date = ISOdate(ifelse(month < 10, 2000, 1999), month, day)) #|>
 # pivot_longer(c(q10,mean,q90),names_to='variable')
 
-
 p_cyclical <- cyclical |>
   filter(forcing_type == "FA") |>
   filter(calb_type == "por") |>
   mutate(data_type = ifelse(data_type == "obs", "Observed", "Simulated")) |>
   ggplot() +
-  geom_ribbon(aes(plot_date, ymin = q10, ymax = q90),
+  geom_ribbon(
+    aes(plot_date, ymin = q10, ymax = q90),
     alpha = 0.2,
     data = cyclical |> filter(data_type == "sim")
   ) +
   geom_line(aes(plot_date, mean, color = data_type)) +
   facet_wrap(~basin, ncol = 1) +
-  scale_x_datetime(date_breaks = "month", date_labels = "%b", expand = c(0.01, 0.01)) +
-  theme_bw() +
+  scale_x_datetime(
+    date_breaks = "month",
+    date_labels = "%b",
+    expand = c(0.01, 0.01)
+  ) +
+  theme_minimal() +
   scale_color_manual("", values = c("black", "cornflowerblue")) +
   scale_fill_manual(values = colorblind_pal()(8)[c(2, 3)]) +
   theme(
@@ -133,7 +161,7 @@ p_timeseries <- calb_data_long |>
   geom_line(aes(as.POSIXct(date), flow, color = data_type), alpha = .75) +
   facet_wrap(~basin, ncol = 1, scales = "free_y") +
   scale_color_manual("", values = colorblind_pal()(8)[1:2]) +
-  theme_bw() +
+  theme_minimal() +
   labs(x = "", y = "Flow [cfs]") +
   scale_x_datetime(minor_breaks = "month") +
   theme(legend.position = "top")
@@ -147,14 +175,18 @@ p_peak_flow <- low_high_flow |>
   filter(calb_type == "por", forcing_type == "FA") |>
   ggplot() +
   geom_point(aes(sim, obs)) +
-  geom_label(aes(x = 0, y = Inf, label = label),
-    vjust = 1.5, hjust = 0,
-    data = low_high_flow_pbias |> filter(calb_type == "por", forcing_type == "FA") |> filter(flow == "High Flow")
+  geom_label(
+    aes(x = 0, y = Inf, label = label),
+    vjust = 1.5,
+    hjust = 0,
+    data = low_high_flow_pbias |>
+      filter(calb_type == "por", forcing_type == "FA") |>
+      filter(flow == "High Flow")
   ) +
   facet_grid(flow ~ basin) +
   coord_equal() +
   geom_abline(slope = 1, intercept = 0) +
-  theme_bw() +
+  theme_minimal() +
   labs(x = "Simulated flow [cfs]", y = "Observed flow [cfs]")
 p_peak_flow
 sprintf("%s/peak_flow.pdf", figure_dir) |>
@@ -166,14 +198,17 @@ p_low_flow <- low_high_flow |>
   filter(calb_type == "por", forcing_type == "FA") |>
   ggplot() +
   geom_point(aes(sim, obs)) +
-  geom_label(aes(x = Inf, y = 0, label = label),
-    vjust = 0.2, hjust = 1.1,
+  geom_label(
+    aes(x = Inf, y = 0, label = label),
+    vjust = 0.2,
+    hjust = 1.1,
     data = low_high_flow_pbias |>
-      filter(calb_type == "por", forcing_type == "FA") |> filter(flow == "Low Flow")
+      filter(calb_type == "por", forcing_type == "FA") |>
+      filter(flow == "Low Flow")
   ) +
   facet_grid(flow ~ basin) +
   geom_abline(slope = 1, intercept = 0) +
-  theme_bw() +
+  theme_minimal() +
   labs(x = "Simulated flow [cfs]", y = "Observed flow [cfs]")
 p_low_flow
 sprintf("%s/low_flow.pdf", figure_dir) |>
